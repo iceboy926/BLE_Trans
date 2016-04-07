@@ -62,6 +62,8 @@
 @property (strong, nonatomic) CBPeripheral          *connectPeripheral;
 @property (strong, nonatomic) CBCharacteristic      *character;
 @property (strong, nonatomic) NSMutableData         *data;
+@property (strong, nonatomic) CBCharacteristic      *characteristicWrite;
+@property (strong, nonatomic) NSData *dataReadySend;
 
 @end
 
@@ -148,6 +150,10 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     _data = [[NSMutableData alloc] init];
     
     
+    _dataReadySend = nil;
+    
+    self.isCanSendData = YES;
+    
     
 //    UIButton * signButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
 //    [signButton setFrame:CGRectMake(80, 80, 120, 32)];
@@ -156,12 +162,18 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
 //    [self.view addSubview:signButton];
     
     _UIInputTextView.delegate = self;
-    _UIInputTextView.text = @"0010001000";
+    //_UIInputTextView.text = @"5948a70080f20001a03c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d227574662d38223f3e3c543e3c443e3c4d3e3c6b3ee694b6e6acbee4babae5908de7a7b03a3c2f6b3e3c763ee5bca0e4b8893c2f763e3c2f4d3e3c4d3e3c6b3ee694b6e6acbee4babae8b4a6e58fb73a3c2f6b3e3c763e313233343536373839303132333435363c2f763e3c2f4d3e3c4d3e3c6b3ee98791e9a29d3a3c2f6b3e3c763e85c0";
+    
+    
+    
+    _UIInputTextView.text = @"5948070080f200000006e4";
     
     _UIOutputTextView.delegate = self;
-    _UIOutputTextView.text = @"";
+    _UIOutputTextView.text = @"59484d0080f20001463132332e32333c2f763e3c2f4d3e3c2f443e3c453e3c4d3e3c6b3ee6b581e6b0b4e58fb73a3c2f6b3e3c763e313233343536373839303c2f763e3c2f4d3e3c2f453e3c2f543ef27f";
     
     [self InitUI];
+    
+    //[self scan];
 
 }
 
@@ -188,6 +200,8 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
 {
     NSLog(@"ReturnDone  ");
     
+    [_UIInputTextView resignFirstResponder];
+    [_UIOutputTextView resignFirstResponder];
 }
 
 
@@ -231,6 +245,8 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     
     NSLog(@"SendBlueData");
     
+    _UIDataOutputTextView.text = @"";
+    
     char szInputData[1024] = {0};
     
     NSString *strInput = _UIInputTextView.text;
@@ -242,7 +258,9 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     NSData *dataInput = [NSData dataWithBytes:szInputData length:inputDataLen];
     
     
-    [self.connectPeripheral writeValue:dataInput forCharacteristic:self.character type:CBCharacteristicWriteWithResponse];
+    [self sendData:dataInput];
+    
+    //_UIInputTextView.text = @"<#string#>"
     
     
 }
@@ -278,6 +296,13 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     NSLog(@"Scanning started");
 }
 
+-(void)stopscan
+{
+    [self.centralManager stopScan];
+    
+     NSLog(@"Scanning stoped");
+}
+
 
 
 - (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
@@ -298,18 +323,18 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
  */
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisementData RSSI:(NSNumber *)RSSI
 {
-    // Reject any where the value is above reasonable range
-    if (RSSI.integerValue > -15)
-    {
-        return;
-    }
-        
-    // Reject if the signal strength is too low to be close enough (Close is around -22dB)
-    if (RSSI.integerValue < -35)
-    {
-        return;
-    }
-    
+//    // Reject any where the value is above reasonable range
+//    if (RSSI.integerValue > -15)
+//    {
+//        return;
+//    }
+//        
+//    // Reject if the signal strength is too low to be close enough (Close is around -22dB)
+//    if (RSSI.integerValue < -35)
+//    {
+//        return;
+//    }
+//    
     NSLog(@"Discovered %@ at %@", peripheral.name, RSSI);
     
     // Ok, it's in range - have we already seen it?
@@ -319,10 +344,11 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
         // Save a local copy of the peripheral, so CoreBluetooth doesn't get rid of it
         self.discoveredPeripheral = peripheral;
         
-        if([peripheral.name rangeOfString:@"JYH-SPP"].location != NSNotFound )
+        if( (peripheral.name != nil)&& [peripheral.name rangeOfString:@"JYH-SPP"].location != NSNotFound )
         {
             // And connect
             NSLog(@"Connecting to peripheral %@", peripheral);
+            self.connectPeripheral = peripheral;
             [self.centralManager connectPeripheral:peripheral options:nil];
         }
         
@@ -358,6 +384,8 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     
     // Search only for services that match our UUID
     [peripheral discoverServices:@[[CBUUID UUIDWithString:TRANSFER_SERVICE_UUID]]];
+    
+    [self stopscan];
 }
 
 
@@ -380,7 +408,7 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     // Loop through the newly filled peripheral.services array, just in case there's more than one.
     for (CBService *service in peripheral.services)
     {
-        [peripheral discoverCharacteristics:@[[CBUUID UUIDWithString:TRANSFER_CHARACTERISTIC_UUID]] forService:service];
+        [peripheral discoverCharacteristics:nil forService:service];
     }
 }
 
@@ -402,10 +430,15 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     {
         
         // And check if it's the right one
-        if ([characteristic.UUID isEqual:[CBUUID UUIDWithString:TRANSFER_CHARACTERISTIC_UUID]]) {
+        if ([characteristic.UUID isEqual:[CBUUID UUIDWithString:UUIDSTR_ISSC_TRANS_TX]])
+        {
      
             // If it is, subscribe to it
             [peripheral setNotifyValue:YES forCharacteristic:characteristic];
+        }
+        else if([characteristic.UUID isEqual:[CBUUID UUIDWithString:UUIDSTR_ISSC_TRANS_RX]])
+        {
+            self.characteristicWrite = characteristic;;
         }
     }
     
@@ -429,34 +462,25 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
 
     NSData *dataRec = characteristic.value;
     
-    if([dataRec length] > 1)
-    {
-        const char *recdata = [dataRec bytes];
-        
-        
-    }
     
-//    NSString *stringFromData = [[NSString alloc] initWithData:characteristic.value encoding:NSUTF8StringEncoding];
-//    
-//    // Have we got everything we need?
-//    if ([stringFromData isEqualToString:@"EOM"])
-//    {
-//        
-//        // We have, so show the data, 
-//        //[self.textview setText:[[NSString alloc] initWithData:self.data encoding:NSUTF8StringEncoding]];
-//        
-//        // Cancel our subscription to the characteristic
-//        [peripheral setNotifyValue:NO forCharacteristic:characteristic];
-//        
-//        // and disconnect from the peripehral
-//        [self.centralManager cancelPeripheralConnection:peripheral];
-//    }
-//
-//    // Otherwise, just add the data on to what we already have
-//    [self.data appendData:characteristic.value];
-//    
-//    // Log it
-//    NSLog(@"Received: %@", stringFromData);
+    //_UIDataOutputTextView.text = @"";
+    
+    char *outdata = [dataRec bytes];
+    
+    int len = [dataRec length];
+    
+    char szoutdata[1024] = {0};
+    
+    int outlen = 0;
+    
+    outlen = AscToHex(szoutdata, outdata, len);
+    
+    NSString *strout = [[NSString alloc] initWithBytes:szoutdata length:outlen encoding:NSASCIIStringEncoding];
+    
+    _UIDataOutputTextView.text = strout;
+    
+    
+   //
 }
 
 
@@ -470,9 +494,10 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
     }
     
     
+    NSLog(@"didUpdateNotificationStateForCharacteristic  ok");
     
     // Exit if it's not the transfer characteristic
-    if (![characteristic.UUID isEqual:[CBUUID UUIDWithString:TRANSFER_CHARACTERISTIC_UUID]]) {
+    if (![characteristic.UUID isEqual:[CBUUID UUIDWithString:UUIDSTR_ISSC_TRANS_TX]]) {
         return;
     }
     
@@ -492,10 +517,52 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
 //    }
 }
 
+
+- (void)sendData:(NSData *)dataMsg
+{
+    //writeFileLog("sendData","begain");
+    if (self.connectPeripheral == nil)
+    {
+        NSLog(@"没有找到匹配成功的外围设备");
+    }
+    else if(dataMsg.length == 0)
+    {
+        NSLog(@"请输入发送文本");
+    }
+    else if(self.isCanSendData)
+    {
+        NSData *dataSend = nil;
+        self.isCanSendData = NO;
+        
+        if (dataMsg.length > PACKAGE_DATA_MAXLEN)
+        {
+            dataSend = [dataMsg subdataWithRange:NSMakeRange(0, PACKAGE_DATA_MAXLEN)];
+            _dataReadySend = [dataMsg subdataWithRange:NSMakeRange(PACKAGE_DATA_MAXLEN, dataMsg.length - PACKAGE_DATA_MAXLEN)];
+        }
+        else
+        {
+            dataSend = [dataMsg subdataWithRange:NSMakeRange(0, dataMsg.length)];
+            _dataReadySend = nil;
+        }
+        [self.connectPeripheral writeValue:dataSend forCharacteristic:self.characteristicWrite type:CBCharacteristicWriteWithResponse];
+        NSLog(@"senddata = %@", dataSend);
+        dataSend =nil;
+    }
+    //writeFileLog("sendData","end");
+}
+
  - (void)peripheral:(CBPeripheral *)peripheral didWriteValueForCharacteristic:(CBCharacteristic *)characteristic error:(nullable NSError *)error
 {
     NSLog(@"didWriteValueForCharacteristic error msg:%d, %@, %@", error.code ,[error localizedFailureReason], [error localizedDescription]);
     NSLog(@"characteristic data = %@ len = %d id = %@",characteristic.value,[characteristic.value length],characteristic.UUID);
+    
+
+    
+    self.isCanSendData = YES;
+    
+    if (_dataReadySend) {
+        [self sendData:_dataReadySend];
+    }
     
 }
 
@@ -532,7 +599,7 @@ DWORD HexToAsc(char *pDst, char *pSrc, DWORD nSrcLen)
             {
                 for (CBCharacteristic *characteristic in service.characteristics)
                 {
-                    if ([characteristic.UUID isEqual:[CBUUID UUIDWithString:TRANSFER_CHARACTERISTIC_UUID]])
+                    if ([characteristic.UUID isEqual:[CBUUID UUIDWithString:UUIDSTR_ISSC_TRANS_TX]])
                     {
                         if (characteristic.isNotifying)
                         {

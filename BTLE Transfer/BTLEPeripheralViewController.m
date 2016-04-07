@@ -117,10 +117,10 @@
     // ... so build our service.
     
     // Start with the CBMutableCharacteristic
-    self.transferCharacteristic = [[CBMutableCharacteristic alloc] initWithType:[CBUUID UUIDWithString:TRANSFER_CHARACTERISTIC_UUID]
-                                                                      properties:CBCharacteristicPropertyNotify
-                                                                           value:nil
-                                                                     permissions:CBAttributePermissionsReadable];
+   // self.transferCharacteristic = [[CBMutableCharacteristic alloc] initWithType:[CBUUID UUIDWithString:TRANSFER_CHARACTERISTIC_UUID]
+      //                                                                properties:CBCharacteristicPropertyNotify
+   //                                                                        value:nil
+  //                                                                   permissions:CBAttributePermissionsReadable];
 
     // Then the service
     CBMutableService *transferService = [[CBMutableService alloc] initWithType:[CBUUID UUIDWithString:TRANSFER_SERVICE_UUID]

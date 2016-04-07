@@ -55,5 +55,6 @@
 @property (weak, nonatomic) IBOutlet UIButton *uiSendButton;
 @property (weak, nonatomic) IBOutlet UITextView *UIInputTextView;
 @property (weak, nonatomic) IBOutlet UITextView *UIOutputTextView;
-
+@property (weak, nonatomic) IBOutlet UITextView *UIDataOutputTextView;
+@property (nonatomic) BOOL isCanSendData;
 @end
